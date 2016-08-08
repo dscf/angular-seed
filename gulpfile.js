@@ -3,18 +3,33 @@
 
 var gulp = require('gulp');
 var $ = require('gulp-load-plugins')();
+var jscs = require('gulp-jscs');
 var openURL = require('open');
 var lazypipe = require('lazypipe');
 var rimraf = require('rimraf');
 var wiredep = require('wiredep').stream;
 var runSequence = require('run-sequence');
 var sourcemaps = require('gulp-sourcemaps');
-var minifyHtml = require('gulp-minify-html');
 var ngTemplate = require('gulp-ng-template');
 var concat = require('gulp-concat');
-var gulpsync = require('gulp-sync')(gulp);
 var flatten = require('gulp-flatten');
 var gulpProtractorAngular = require('gulp-angular-protractor');
+var jshint = require('gulp-jshint');
+var gutil = require('gulp-util');
+var stylish = require('gulp-jscs-stylish');
+var map = require('map-stream');
+
+var reportIfSuccessful = function(file, callback) {
+  return map(function(file, callback) {
+    if (file.jshint.success && file.jscs.success) {
+      console.log(gutil.colors.white(file.path));
+      /* Add green tick and success message in the same style as jshint-stylish */
+      console.log('\n  ' + gutil.colors.green('\u2713  ') + gutil.colors.white('linting passed') + '\n');
+    }
+    callback(null, file)
+  });
+};
+
 
 var conf = {
   app: require('./bower.json').appPath || 'app',
@@ -56,6 +71,11 @@ var lintScripts = lazypipe()
   .pipe($.jshint, '.jshintrc')
   .pipe($.jshint.reporter, 'jshint-stylish');
 
+var csScripts = lazypipe()
+  .pipe(jscs)
+  .pipe(jscs.reporter);
+
+
 var styles = lazypipe()
   .pipe($.sass, {
     outputStyle: 'expanded',
@@ -67,19 +87,28 @@ var styles = lazypipe()
 ///////////
 // Tasks //
 ///////////
+gulp.task('lint-e2e', function() {
+  return gulp.src(conf.test + '/e2e/spec/**/*.js')
+    .pipe(lintScripts())
+    .pipe(csScripts())
+    .pipe(stylish.combineWithHintResults())
+    .pipe(jshint.reporter('jshint-stylish'))
+    .pipe(reportIfSuccessful())
+    .pipe(jshint.reporter('fail'));
+});
 
-gulp.task('e2e', function(callback) {
-    gulp
-        .src([conf.test + '/e2e/spec/example-spec.js'])
-        .pipe(gulpProtractorAngular({
-            'configFile': conf.test + '/e2e/protractor.conf.js',
-            'debug': false,
-            'autoStartStopServer': true
-        }))
-        .on('error', function(e) {
-            console.log(e);
-        })
-        .on('end', callback);
+gulp.task('e2e', ['lint-e2e'], function(callback) {
+  gulp
+    .src([conf.test + '/e2e/spec/example-spec.js'])
+    .pipe(gulpProtractorAngular({
+      'configFile': conf.test + '/e2e/protractor.conf.js',
+      'debug': false,
+      'autoStartStopServer': true
+    }))
+    .on('error', function(e) {
+      console.log(e);
+    })
+    .on('end', callback);
 });
 
 gulp.task('styles', function() {
@@ -87,9 +116,25 @@ gulp.task('styles', function() {
     .pipe(styles());
 });
 
-gulp.task('lint:scripts', function() {
+
+gulp.task('lint-test-fail', function() {
+  return gulp.src(paths.test)
+    .pipe(lintScripts())
+    .pipe(csScripts())
+    .pipe(stylish.combineWithHintResults())
+    .pipe(jshint.reporter('jshint-stylish'))
+    .pipe(reportIfSuccessful())
+    .pipe(jshint.reporter('fail'));
+});
+
+gulp.task('lint', function() {
   return gulp.src(paths.scripts)
-    .pipe(lintScripts());
+    .pipe(lintScripts())
+    .pipe(csScripts())
+    .pipe(stylish.combineWithHintResults())
+    .pipe(jshint.reporter('jshint-stylish'))
+    .pipe(reportIfSuccessful())
+    .pipe(jshint.reporter('fail'));
 });
 
 gulp.task('clean:tmp', function(cb) {
@@ -140,17 +185,25 @@ gulp.task('watch', function() {
   $.watch(paths.scripts)
     .pipe($.plumber())
     .pipe(lintScripts())
+    .pipe(csScripts())
+    .pipe(stylish.combineWithHintResults())
+    .pipe(jshint.reporter('jshint-stylish'))
+    .pipe(reportIfSuccessful())
     .pipe($.connect.reload());
 
   $.watch(paths.test)
     .pipe($.plumber())
-    .pipe(lintScripts());
+    .pipe(lintScripts())
+    .pipe(csScripts())
+    .pipe(stylish.combineWithHintResults())
+    .pipe(jshint.reporter('jshint-stylish'))
+    .pipe(reportIfSuccessful());
 
   gulp.watch('bower.json', ['wiredep']);
 });
 
 gulp.task('serve', function(cb) {
-  runSequence('clean:tmp', ['lint:scripts'], ['start:client'],
+  runSequence('clean:tmp', ['lint'], ['start:client'],
     'watch', cb);
 });
 
@@ -162,15 +215,36 @@ gulp.task('serve:prod', function() {
   });
 });
 
-gulp.task('test', ['start:server:test'], function() {
+gulp.task('test', function() {
+  runSequence('lint-test', 'start:server:test', 'test-core', 'watch-test');
+});
+
+gulp.task('watch-test', function() {
+  return gulp.watch(paths.test, ['test-core']);
+});
+
+gulp.task('lint-test', function() {
+  return gulp.src(paths.test)
+    .pipe($.plumber())
+    .pipe(lintScripts())
+    .pipe(csScripts())
+    .pipe(stylish.combineWithHintResults())
+    .pipe(jshint.reporter('jshint-stylish'))
+    .pipe(reportIfSuccessful());
+})
+
+gulp.task('test-core', function() {
+  runSequence('lint-test', 'test-ut');
+});
+
+gulp.task('test-ut', function() {
   var testToFiles = paths.testRequire.concat(paths.scripts, paths.test);
   return gulp.src(testToFiles)
     .pipe($.karma({
       configFile: paths.karma,
-      action: 'watch'
+      action: 'run'
     }));
 });
-
 // inject bower components
 gulp.task('wiredep', function() {
   return gulp.src(paths.views.main)
@@ -230,10 +304,8 @@ gulp.task('ngTemplate', function() {
 });
 
 gulp.task('jstask', function() {
-  return runSequence('extractAndAnnotate', 'ngTemplate', 'appjsmin', 'vendorjsmin', 'reversion');
+  return runSequence('lint', 'lint-test-fail', 'test-ut', 'extractAndAnnotate', 'ngTemplate', 'appjsmin', 'vendorjsmin', 'reversion');
 });
-
-// gulp.task('jstask', gulpsync.sync(['extractAndAnnotate', 'ngTemplate', 'appjsmin', 'vendorjsmin', 'reversion']));
 
 //reversion css files
 gulp.task('revcss', function() {
@@ -264,8 +336,7 @@ gulp.task('revreplace', function() {
 })
 
 gulp.task('copyMainview', function() {
-  return gulp.src('.tmp/index.html').
-  pipe(gulp.dest(conf.dist));
+  return gulp.src('.tmp/index.html').pipe(gulp.dest(conf.dist));
 });
 
 gulp.task('reversion', ['copyMainview'], function() {
@@ -286,8 +357,8 @@ gulp.task('appjsmin', [], function() {
 //minify vendor scripts
 gulp.task('vendorjsmin', [], function() {
   return gulp.src(conf.dist + '/scripts/vendor.js')
-    // remove the comments below to get map file
-    // .pipe(sourcemaps.init())
+  // remove the comments below to get map file
+  // .pipe(sourcemaps.init())
     .pipe($.uglify())
     // .pipe(sourcemaps.write())
     .pipe(gulp.dest('.tmp/scripts/'));
@@ -306,18 +377,13 @@ gulp.task('html', function() {
 
 gulp.task('images', function() {
   return gulp.src(conf.app + '/images/**/*')
-    // .pipe($.cache($.imagemin({
-    //   optimizationLevel: 5,
-    //   progressive: true,
-    //   interlaced: true
-    // })))
     .pipe(gulp.dest(conf.dist + '/images'));
 });
 
 gulp.task('copy:extras', function() {
   return gulp.src(conf.app + '/*/.*', {
-      dot: true
-    })
+    dot: true
+  })
     .pipe(gulp.dest(conf.dist));
 });
 
