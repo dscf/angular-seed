@@ -67,13 +67,31 @@ var paths = {
 // Reusable pipelines //
 ////////////////////////
 
-var lintScripts = lazypipe()
-  .pipe($.jshint, '.jshintrc')
-  .pipe($.jshint.reporter, 'jshint-stylish');
-
-var csScripts = lazypipe()
+var lintScriptsCore = lazypipe()
+  .pipe(jshint)
+  .pipe(jshint.reporter)
   .pipe(jscs)
-  .pipe(jscs.reporter);
+  .pipe(jscs.reporter)
+  .pipe(stylish.combineWithHintResults)
+  .pipe(jshint.reporter, 'jshint-stylish')
+  .pipe(reportIfSuccessful);
+
+
+var lintScripts = function(src, fail) {
+  var lint = gulp.src(src)
+    .pipe(lintScriptsCore());
+
+  if (fail) {
+    return lint.pipe(jshint.reporter('fail'));
+  } else {
+    return lint;
+  }
+}
+
+
+// var csScripts = lazypipe()
+//   .pipe(jscs)
+//   .pipe(jscs.reporter);
 
 
 var styles = lazypipe()
@@ -87,14 +105,9 @@ var styles = lazypipe()
 ///////////
 // Tasks //
 ///////////
+
 gulp.task('lint-e2e', function() {
-  return gulp.src(conf.test + '/e2e/spec/**/*.js')
-    .pipe(lintScripts())
-    .pipe(csScripts())
-    .pipe(stylish.combineWithHintResults())
-    .pipe(jshint.reporter('jshint-stylish'))
-    .pipe(reportIfSuccessful())
-    .pipe(jshint.reporter('fail'));
+  return lintScripts(conf.test + '/e2e/spec/**/*.js', true);
 });
 
 gulp.task('e2e', ['lint-e2e'], function(callback) {
@@ -118,23 +131,15 @@ gulp.task('styles', function() {
 
 
 gulp.task('lint-test-fail', function() {
-  return gulp.src(paths.test)
-    .pipe(lintScripts())
-    .pipe(csScripts())
-    .pipe(stylish.combineWithHintResults())
-    .pipe(jshint.reporter('jshint-stylish'))
-    .pipe(reportIfSuccessful())
-    .pipe(jshint.reporter('fail'));
+  return lintScripts(paths.test, true);
+});
+
+gulp.task('lint-test', function() {
+  return lintScripts(paths.test, false);
 });
 
 gulp.task('lint', function() {
-  return gulp.src(paths.scripts)
-    .pipe(lintScripts())
-    .pipe(csScripts())
-    .pipe(stylish.combineWithHintResults())
-    .pipe(jshint.reporter('jshint-stylish'))
-    .pipe(reportIfSuccessful())
-    .pipe(jshint.reporter('fail'));
+  return lintScripts(paths.scripts, true);
 });
 
 gulp.task('clean:tmp', function(cb) {
@@ -184,20 +189,8 @@ gulp.task('watch', function() {
 
   $.watch(paths.scripts)
     .pipe($.plumber())
-    .pipe(lintScripts())
-    .pipe(csScripts())
-    .pipe(stylish.combineWithHintResults())
-    .pipe(jshint.reporter('jshint-stylish'))
-    .pipe(reportIfSuccessful())
+    .pipe(lintScriptsCore())
     .pipe($.connect.reload());
-
-  $.watch(paths.test)
-    .pipe($.plumber())
-    .pipe(lintScripts())
-    .pipe(csScripts())
-    .pipe(stylish.combineWithHintResults())
-    .pipe(jshint.reporter('jshint-stylish'))
-    .pipe(reportIfSuccessful());
 
   gulp.watch('bower.json', ['wiredep']);
 });
@@ -216,22 +209,12 @@ gulp.task('serve:prod', function() {
 });
 
 gulp.task('test', function() {
-  runSequence('lint-test', 'start:server:test', 'test-core', 'watch-test');
+  runSequence('start:server:test', 'test-core', 'watch-test');
 });
 
 gulp.task('watch-test', function() {
   return gulp.watch(paths.test, ['test-core']);
 });
-
-gulp.task('lint-test', function() {
-  return gulp.src(paths.test)
-    .pipe($.plumber())
-    .pipe(lintScripts())
-    .pipe(csScripts())
-    .pipe(stylish.combineWithHintResults())
-    .pipe(jshint.reporter('jshint-stylish'))
-    .pipe(reportIfSuccessful());
-})
 
 gulp.task('test-core', function() {
   runSequence('lint-test', 'test-ut');
