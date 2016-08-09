@@ -46,13 +46,8 @@ var paths = {
     'bower_components/angular/angular.js',
     'bower_components/angular-mocks/angular-mocks.js',
     'bower_components/angular-resource/angular-resource.js',
-    'bower_components/angular-cookies/angular-cookies.js',
     'bower_components/angular-sanitize/angular-sanitize.js',
-    'bower_components/angular-route/angular-route.js',
     'bower_components/angular-animate/angular-animate.js',
-    'bower_components/angular-touch/angular-touch.js',
-    'bower_components/angular-ui-sortable/sortable.js',
-    'bower_components/angular-local-storage/dist/angular-local-storage.js',
     'test/ut/mock/**/*.js',
     'test/ut/spec/**/*.js'
   ],
@@ -147,7 +142,7 @@ gulp.task('clean:tmp', function(cb) {
 });
 
 gulp.task('start:client', ['start:server', 'styles', 'html'], function() {
-  openURL('http://localhost:9000');
+  openURL('http://localhost:9000/index.html#/');
 });
 
 gulp.task('start:server', function() {
@@ -192,7 +187,7 @@ gulp.task('watch', function() {
     .pipe(lintScriptsCore())
     .pipe($.connect.reload());
 
-  gulp.watch('bower.json', ['wiredep']);
+  // gulp.watch('bower.json', ['wiredep']);
 });
 
 gulp.task('serve', function(cb) {
@@ -339,17 +334,19 @@ gulp.task('appjsmin', [], function() {
 
 //minify vendor scripts
 gulp.task('vendorjsmin', [], function() {
-  return gulp.src(conf.dist + '/scripts/vendor.js')
-  // remove the comments below to get map file
-  // .pipe(sourcemaps.init())
+  return gulp.src('.tmp/scripts/vendor.js')
+    // remove the comments below to get map file
+    // .pipe(sourcemaps.init())
     .pipe($.uglify())
     // .pipe(sourcemaps.write())
     .pipe(gulp.dest('.tmp/scripts/'));
 });
 
+
 gulp.task('client:build', [], function() {
   runSequence('styles', 'cssmin', 'jstask');
 });
+
 
 //copy html view files to  views folder
 gulp.task('html', function() {
