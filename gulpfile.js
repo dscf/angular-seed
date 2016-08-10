@@ -43,6 +43,7 @@ var paths = {
   styles: [conf.app + '/styles/**/*.scss'],
   test: ['test/ut/spec/**/*.js'],
   testRequire: [
+    'bower_components/jquery/dist/jquery.js',
     'bower_components/angular/angular.js',
     'bower_components/angular-mocks/angular-mocks.js',
     'bower_components/angular-resource/angular-resource.js',
@@ -55,7 +56,8 @@ var paths = {
   views: {
     main: conf.app + '/index.html',
     files: [conf.app + '/**/*.html']
-  }
+  },
+  templates: '.tmp/templates.js'
 };
 
 ////////////////////////
@@ -204,7 +206,7 @@ gulp.task('serve:prod', function() {
 });
 
 gulp.task('test', function() {
-  runSequence('start:server:test', 'test-core', 'watch-test');
+  runSequence('ngTemplate', 'start:server:test', 'test-core', 'watch-test');
 });
 
 gulp.task('watch-test', function() {
@@ -216,7 +218,7 @@ gulp.task('test-core', function() {
 });
 
 gulp.task('test-ut', function() {
-  var testToFiles = paths.testRequire.concat(paths.scripts, paths.test);
+  var testToFiles = paths.testRequire.concat(paths.scripts, paths.test, paths.templates);
   return gulp.src(testToFiles)
     .pipe($.karma({
       configFile: paths.karma,
